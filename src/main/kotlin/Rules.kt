@@ -12,64 +12,94 @@ fun tryApplyMove(board: Board, move: Move, current: Color, ep: EnPassant): Strin
     if (startPiece != currentChar) {
         return if (current == Color.WHITE) "No white pawn at ${from.toAlg()}" else "No black pawn at ${from.toAlg()}"
     }
-    //будем обнулять взятие на проходе, установим заново, если будет двойной шаг
-    var newEpTarget: Position? = null
-    var newEpVictim: Position? = null
 
-    //ход на 1 вперед
-    if (to.x == from.x && to.y == from.y + dir) {
-        if (board.inside(to.x, to.y) && board.isEmpty(to)) {
-            board.move(from, to)
-            ep.clear()
-            return null
-        }
+    return when {
+        canForward1(board, from, to, dir) ->
+            doForward1(board, from, to, ep)
+
+        canForward2(board, from, to, current, dir) ->
+            doForward2(board, from, to, current, dir, ep)
+
+        canCapture(board, from, to, dir, opponentChar) ->
+            doCapture(board, from, to, opponentChar, ep)
+
+        canEnPassant(board, from, to, dir, ep, opponentChar) ->
+            doEnPassant(board, from, to, dir, ep)
+
+        else -> "Invalid input"
     }
-
-    //ход на 2 вперед (только первый ход этой пешки)
-
-    val startRank = if (current == Color.WHITE) 1 else 6
-    if (from.y == startRank && to.x == from.x && to.y == from.y + 2 * dir) {
-        val mid = Position(from.x, from.y + dir)
-        if (board.inside(to.x, to.y) && board.isEmpty(to) && board.isEmpty(mid)) {
-            board.move(from, to)
-            // по правилам такая пешка может быть взята на проходе слудующим ходом
-            newEpTarget = mid
-            newEpVictim = to
-            ep.setEnPassant(newEpTarget, newEpVictim)
-            return null
-        }
-    }
-
-    //взятие по диагонали
-    if ((to.x == from.x + 1 || to.x == from.x - 1) && to.y == from.y + dir) {
-        if (board.inside(to.x, to.y) && board.get(to) == opponentChar) {
-            board.move(from, to)
-            ep.clear()
-            return null
-        }
-    }
-
-    //взятие на проходе
-    val epTarget = ep.target
-    val epVictim = ep.victim
-
-    if (epTarget != null && epVictim != null) {
-        if ((to.x == from.x + 1 || to.x == from.x - 1) &&
-            to.y == from.y + dir && to == epTarget && board.isEmpty(to)
-        ) {
-            if (board.get(epVictim) == opponentChar && epTarget.x == epVictim.x && epVictim.y == epTarget.y - dir) {
-                board.set(epVictim, '.')
-                board.move(from, to)
-                ep.clear()
-                return null
-            }
-        }
-    }
-
-    /* после каждого хода пишу ep.clear() тк по правилам взятие на проходе можно сделать только после двойного шага пешки*/
-
-    return "Invalid input"
 }
+
+private fun canForward1(board: Board, from: Position, to: Position, dir: Int): Boolean {
+    return to.x == from.x && to.y == from.y + dir &&
+            board.inside(to.x, to.y) && board.isEmpty(to)
+}
+
+private fun canForward2(board: Board, from: Position, to: Position, current: Color, dir: Int): Boolean {
+    val startRank = if (current == Color.WHITE) 1 else 6
+    if (!(from.y == startRank && to.x == from.x && to.y == from.y + 2 * dir)) return false
+    val mid = Position(from.x, from.y + dir)
+    return board.inside(to.x, to.y) && board.isEmpty(to) && board.isEmpty(mid)
+}
+
+private fun canCapture(board: Board, from: Position, to: Position, dir: Int, opponentChar: Char): Boolean {
+    val diag = (to.x == from.x + 1 || to.x == from.x - 1) && to.y == from.y + dir
+    return diag && board.inside(to.x, to.y) && board.get(to) == opponentChar
+}
+
+private fun canEnPassant(
+    board: Board,
+    from: Position,
+    to: Position,
+    dir: Int,
+    ep: EnPassant,
+    opponentChar: Char
+): Boolean {
+    val epTarget = ep.target ?: return false
+    val epVictim = ep.victim ?: return false
+    val diag = (to.x == from.x + 1 || to.x == from.x - 1) && to.y == from.y + dir
+    if (!(diag && to == epTarget && board.isEmpty(to))) return false
+    return board.get(epVictim) == opponentChar &&
+            epTarget.x == epVictim.x &&
+            epVictim.y == epTarget.y - dir
+}
+
+private fun doForward1(board: Board, from: Position, to: Position, ep: EnPassant): String? {
+    board.move(from, to)
+    ep.clear()
+    return null
+}
+
+private fun doForward2(
+    board: Board,
+    from: Position,
+    to: Position,
+    current: Color,
+    dir: Int,
+    ep: EnPassant
+): String? {
+    board.move(from, to)
+    // право взятия на проходе — цель (клетка "через"), жертва — клетка назначения
+    val mid = Position(from.x, from.y + dir)
+    ep.setEnPassant(mid, to)
+    return null
+}
+
+private fun doCapture(board: Board, from: Position, to: Position, opponentChar: Char, ep: EnPassant): String? {
+    board.move(from, to)
+    ep.clear()
+    return null
+}
+
+private fun doEnPassant(board: Board, from: Position, to: Position, dir: Int, ep: EnPassant): String? {
+    // ep.victim гарантированно не null по предикату
+    val victim = ep.victim!!
+    board.set(victim, '.')
+    board.move(from, to)
+    ep.clear()
+    return null
+}
+
 
 //нужно для проверки на ничью
 fun hasAnyLegalMove(board: Board, color: Color, ep: EnPassant): Boolean {

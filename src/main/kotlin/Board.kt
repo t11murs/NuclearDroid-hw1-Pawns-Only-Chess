@@ -37,7 +37,7 @@ class Board() {
         println()
     }
 
-    fun move(from: Position, to: Position){
+    fun move(from: Position, to: Position) {
         val piece = get(from)
         set(from, '.')
         set(to, piece)
